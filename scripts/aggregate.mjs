@@ -47,6 +47,7 @@ async function main() {
           top5: 0,
           top10: 0,
           laps_led: 0,
+          points_total: 0,
           points_position: null,
           last_race: null,
         };
@@ -57,6 +58,7 @@ async function main() {
       if (r.finishing_position >= 1 && r.finishing_position <= 5) d.top5++;
       if (r.finishing_position >= 1 && r.finishing_position <= 10) d.top10++;
       d.laps_led += r.laps_led || 0;
+      d.points_total += r.points_earned || 0;
       d.points_position = r.points_position;
       d.last_race = {
         race_name: race.race_name,
@@ -64,6 +66,8 @@ async function main() {
         date: race.race_date,
         finishing_position: r.finishing_position,
         points_earned: r.points_earned,
+        starting_position: r.starting_position,
+        laps_led: r.laps_led,
       };
     }
   }
