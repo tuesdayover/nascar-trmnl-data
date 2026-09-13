@@ -1,5 +1,7 @@
-const SEASON = 2026;
+import fs from "node:fs/promises";
+
 const SERIES = 1;
+const OUT = "docs/nascar-driver-stats.json";
 
 async function fetchJson(url) {
   const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -7,10 +9,19 @@ async function fetchJson(url) {
   return res.json();
 }
 
+// Use the current season, falling back to last season until NASCAR publishes the new schedule feed.
+async function loadSchedule() {
+  const year = Number(process.env.SEASON) || new Date().getUTCFullYear();
+  try {
+    return { season: year, schedule: await fetchJson(`https://cf.nascar.com/cacher/${year}/race_list_basic.json`) };
+  } catch (e) {
+    console.error(`season ${year} unavailable (${e.message}), using ${year - 1}`);
+    return { season: year - 1, schedule: await fetchJson(`https://cf.nascar.com/cacher/${year - 1}/race_list_basic.json`) };
+  }
+}
+
 async function main() {
-  const schedule = await fetchJson(
-    `https://cf.nascar.com/cacher/${SEASON}/race_list_basic.json`
-  );
+  const { season: SEASON, schedule } = await loadSchedule();
   const races = schedule.series_1;
   const now = new Date();
 
@@ -101,12 +112,21 @@ async function main() {
     }
   }
 
-  const fs = await import("node:fs/promises");
+  // Skip the write when nothing but the timestamp would change, so the workflow
+  // doesn't commit (and redeploy Pages) every 30 minutes.
+  const next = { drivers, live: liveData };
+  try {
+    const prev = JSON.parse(await fs.readFile(OUT, "utf8"));
+    if (JSON.stringify({ drivers: prev.drivers, live: prev.live }) === JSON.stringify(next)) {
+      console.log("no data changes");
+      return;
+    }
+  } catch {
+    // no previous file yet
+  }
+
   await fs.mkdir("docs", { recursive: true });
-  await fs.writeFile(
-    "docs/nascar-driver-stats.json",
-    JSON.stringify({ generated_at: now.toISOString(), drivers, live: liveData })
-  );
+  await fs.writeFile(OUT, JSON.stringify({ generated_at: now.toISOString(), ...next }));
 }
 
 main().catch((e) => {
